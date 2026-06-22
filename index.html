@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Check List Cierre Diario del Negocio</title>
+<style>
+  :root{
+    --bg:#f4f1ec;
+    --card:#ffffff;
+    --ink:#2b2420;
+    --muted:#7a7268;
+    --accent:#8a5a3a;
+    --accent-light:#e8d9c9;
+    --ok:#3f7d5a;
+    --line:#e3dbcf;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Segoe UI', Arial, sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    padding:24px;
+    display:flex;
+    justify-content:center;
+  }
+  .wrap{max-width:680px;width:100%;}
+  header{margin-bottom:18px;}
+  h1{font-size:1.5rem;margin:0 0 4px;color:var(--accent);}
+  .sub{color:var(--muted);font-size:0.9rem;}
+  .card{
+    background:var(--card);
+    border-radius:14px;
+    padding:20px 22px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.06);
+    margin-bottom:18px;
+  }
+  .meta{
+    display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;
+  }
+  .meta label{font-size:0.85rem;color:var(--muted);display:block;margin-bottom:4px;}
+  .meta input{
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:8px 10px;
+    font-size:0.95rem;
+    background:#fffdf9;
+  }
+  .progress-bar{
+    height:8px;background:var(--line);border-radius:6px;overflow:hidden;margin:10px 0 6px;
+  }
+  .progress-fill{height:100%;background:var(--ok);width:0%;transition:width .25s;}
+  .progress-text{font-size:0.85rem;color:var(--muted);}
+  ul.tasks{list-style:none;margin:0;padding:0;}
+  ul.tasks li{
+    display:flex;align-items:flex-start;gap:12px;
+    padding:11px 4px;border-bottom:1px solid var(--line);
+  }
+  ul.tasks li:last-child{border-bottom:none;}
+  ul.tasks input[type=checkbox]{
+    width:20px;height:20px;margin-top:2px;accent-color:var(--accent);flex-shrink:0;cursor:pointer;
+  }
+  .task-text{flex:1;font-size:0.97rem;}
+  .task-text.done{color:var(--muted);text-decoration:line-through;}
+  .num{
+    color:var(--accent);font-weight:600;font-size:0.85rem;width:22px;flex-shrink:0;margin-top:2px;
+  }
+  textarea.obs{
+    width:100%;margin-top:4px;border:1px solid var(--line);border-radius:6px;
+    font-size:0.85rem;padding:4px 6px;resize:vertical;min-height:30px;display:none;
+    font-family:inherit;
+  }
+  .section-title{
+    font-weight:600;color:var(--accent);margin:0 0 6px;font-size:1.02rem;
+  }
+  .verif li{padding:9px 4px;}
+  footer .card{display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:space-between;}
+  footer label{font-size:0.85rem;color:var(--muted);margin-right:6px;}
+  footer input[type=text]{
+    border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:0.95rem;
+  }
+  button{
+    background:var(--accent);color:#fff;border:none;border-radius:8px;
+    padding:10px 16px;font-size:0.9rem;cursor:pointer;
+  }
+  button.secondary{background:transparent;color:var(--accent);border:1px solid var(--accent);}
+  .toggle-obs-btn{
+    background:none;border:none;color:var(--accent);font-size:0.78rem;cursor:pointer;padding:2px 0;text-decoration:underline;margin-top:2px;
+  }
+  .saved-note{font-size:0.78rem;color:var(--ok);min-height:16px;}
+  @media print{
+    body{background:#fff;padding:0;}
+    button,.toggle-obs-btn{display:none;}
+    .card{box-shadow:none;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Check List de Cierre Diario del Negocio</h1>
+    <div class="sub">Se guarda automáticamente en este dispositivo, un checklist nuevo cada día.</div>
+  </header>
+
+  <div class="card">
+    <div class="meta">
+      <div>
+        <label for="fecha">Fecha</label>
+        <input type="date" id="fecha">
+      </div>
+      <div style="flex:1;min-width:160px;">
+        <label for="responsable">Responsable</label>
+        <input type="text" id="responsable" placeholder="Nombre" style="width:100%;">
+      </div>
+    </div>
+    <div style="margin-top:6px;">
+      <label style="font-size:0.85rem;color:var(--muted);display:block;margin-bottom:6px;">Ubicación del cierre</label>
+      <button type="button" class="secondary" id="locBtn" onclick="getLocation()">📍 Obtener ubicación actual</button>
+      <span class="saved-note" id="locStatus"></span>
+      <div id="mapWrap" style="display:none;margin-top:10px;border-radius:10px;overflow:hidden;border:1px solid var(--line);">
+        <iframe id="mapFrame" width="100%" height="220" style="border:0;display:block;" loading="lazy"></iframe>
+        <div style="padding:8px 10px;font-size:0.8rem;color:var(--muted);" id="coordsText"></div>
+      </div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-text" id="progressText">0 de 17 completadas</div>
+  </div>
+
+  <div class="card">
+    <p class="section-title">Tareas de cierre</p>
+    <ul class="tasks" id="taskList"></ul>
+  </div>
+
+  <div class="card">
+    <p class="section-title">Verificación final</p>
+    <ul class="tasks verif" id="verifList"></ul>
+  </div>
+
+  <div class="card">
+    <div class="meta">
+      <div style="flex:1;min-width:160px;">
+        <label for="firma">Firma del responsable</label>
+        <input type="text" id="firma" placeholder="Firma / iniciales" style="width:100%;">
+      </div>
+      <div>
+        <label for="hora">Hora de cierre</label>
+        <input type="time" id="hora">
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="card">
+      <button onclick="window.print()">Imprimir / Guardar PDF</button>
+      <button onclick="enviarABaseDeDatos()">💾 Guardar en base de datos</button>
+      <button class="secondary" onclick="resetToday()">Reiniciar checklist de hoy</button>
+      <span class="saved-note" id="savedNote"></span>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+const TASKS = [
+  "Limpiar máquina espresso",
+  "Limpiar barra de trabajo",
+  "Limpiar y trapear el piso al finalizar la jornada",
+  "Lavar toallas y limpiones",
+  "Anotar los pedidos faltantes para el día siguiente",
+  "Secar toda la loza",
+  "Guardar la loza en su lugar correspondiente",
+  "Dejar el trapero en agua con jabón",
+  "Sacar la basura y el reciclaje",
+  "Registrar las bajas o pérdidas del día",
+  "Guardar correctamente las tortas y almojábanas",
+  "Cargar el celular y encenderlo"
+];
+
+const VERIF = [
+  "Equipos apagados según corresponda",
+  "Puertas y ventanas aseguradas",
+  "Luces apagadas",
+  "Caja cerrada y verificada",
+  "Negocio listo para apertura del día siguiente"
+];
+
+const TOTAL = TASKS.length + VERIF.length;
+
+function todayStr(){
+  const d = new Date();
+  return d.toISOString().slice(0,10);
+}
+
+function storageKey(dateStr){ return 'cierre_' + dateStr; }
+
+function loadState(dateStr){
+  try{
+    const raw = localStorage.getItem(storageKey(dateStr));
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+
+function saveState(){
+  const dateStr = document.getElementById('fecha').value || todayStr();
+  const state = {
+    responsable: document.getElementById('responsable').value,
+    lat: window.currentLat || null,
+    lng: window.currentLng || null,
+    firma: document.getElementById('firma').value,
+    hora: document.getElementById('hora').value,
+    tasks: TASKS.map((_,i)=>({
+      done: document.getElementById('task_'+i).checked,
+      obs: document.getElementById('obs_'+i).value
+    })),
+    verif: VERIF.map((_,i)=> document.getElementById('verif_'+i).checked)
+  };
+  try{
+    localStorage.setItem(storageKey(dateStr), JSON.stringify(state));
+    const note = document.getElementById('savedNote');
+    note.textContent = 'Guardado ✓';
+    setTimeout(()=>{ note.textContent=''; }, 1500);
+  }catch(e){ /* ignore */ }
+  updateProgress();
+}
+
+function updateProgress(){
+  let done = 0;
+  TASKS.forEach((_,i)=>{ if(document.getElementById('task_'+i).checked) done++; });
+  VERIF.forEach((_,i)=>{ if(document.getElementById('verif_'+i).checked) done++; });
+  const pct = Math.round((done/TOTAL)*100);
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressText').textContent = done + ' de ' + TOTAL + ' completadas';
+}
+
+function buildLists(){
+  const taskList = document.getElementById('taskList');
+  taskList.innerHTML = '';
+  TASKS.forEach((text, i)=>{
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <span class="num">${i+1}</span>
+      <input type="checkbox" id="task_${i}">
+      <div style="flex:1;">
+        <span class="task-text" id="label_${i}">${text}</span>
+        <br><button type="button" class="toggle-obs-btn" data-i="${i}">+ observación</button>
+        <textarea class="obs" id="obs_${i}" placeholder="Observación..."></textarea>
+      </div>
+    `;
+    taskList.appendChild(li);
+  });
+
+  const verifList = document.getElementById('verifList');
+  verifList.innerHTML = '';
+  VERIF.forEach((text, i)=>{
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <input type="checkbox" id="verif_${i}">
+      <span class="task-text" id="vlabel_${i}">${text}</span>
+    `;
+    verifList.appendChild(li);
+  });
+}
+
+function attachEvents(){
+  TASKS.forEach((_,i)=>{
+    const cb = document.getElementById('task_'+i);
+    cb.addEventListener('change', ()=>{
+      document.getElementById('label_'+i).classList.toggle('done', cb.checked);
+      saveState();
+    });
+    document.getElementById('obs_'+i).addEventListener('input', saveState);
+  });
+  VERIF.forEach((_,i)=>{
+    const cb = document.getElementById('verif_'+i);
+    cb.addEventListener('change', ()=>{
+      document.getElementById('vlabel_'+i).classList.toggle('done', cb.checked);
+      saveState();
+    });
+  });
+  document.querySelectorAll('.toggle-obs-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const i = btn.getAttribute('data-i');
+      const ta = document.getElementById('obs_'+i);
+      ta.style.display = ta.style.display === 'block' ? 'none' : 'block';
+    });
+  });
+  ['responsable','firma','hora'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', saveState);
+  });
+  document.getElementById('fecha').addEventListener('change', ()=>{
+    loadForDate(document.getElementById('fecha').value);
+  });
+}
+
+function applyState(state){
+  document.getElementById('responsable').value = state ? (state.responsable||'') : '';
+  document.getElementById('firma').value = state ? (state.firma||'') : '';
+  if(state && state.lat && state.lng){
+    showMap(state.lat, state.lng);
+  } else {
+    window.currentLat = null;
+    window.currentLng = null;
+    document.getElementById('mapWrap').style.display = 'none';
+    document.getElementById('locStatus').textContent = '';
+  }
+  document.getElementById('hora').value = state ? (state.hora||'') : '';
+
+  TASKS.forEach((_,i)=>{
+    const done = state && state.tasks && state.tasks[i] ? state.tasks[i].done : false;
+    const obs = state && state.tasks && state.tasks[i] ? state.tasks[i].obs : '';
+    document.getElementById('task_'+i).checked = done;
+    document.getElementById('label_'+i).classList.toggle('done', done);
+    document.getElementById('obs_'+i).value = obs;
+    if(obs){ document.getElementById('obs_'+i).style.display = 'block'; }
+  });
+  VERIF.forEach((_,i)=>{
+    const done = state && state.verif ? state.verif[i] : false;
+    document.getElementById('verif_'+i).checked = done;
+    document.getElementById('vlabel_'+i).classList.toggle('done', done);
+  });
+  updateProgress();
+}
+
+function loadForDate(dateStr){
+  const state = loadState(dateStr);
+  applyState(state);
+}
+
+function resetToday(){
+  if(!confirm('¿Reiniciar el checklist de esta fecha? Se perderán los datos guardados de hoy.')) return;
+  const dateStr = document.getElementById('fecha').value || todayStr();
+  localStorage.removeItem(storageKey(dateStr));
+  applyState(null);
+}
+
+function showMap(lat, lng){
+  window.currentLat = lat;
+  window.currentLng = lng;
+  const d = 0.003;
+  const bbox = [lng-d, lat-d, lng+d, lat+d].join(',');
+  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
+  document.getElementById('mapFrame').src = src;
+  document.getElementById('mapWrap').style.display = 'block';
+  document.getElementById('coordsText').textContent =
+    `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)} — `;
+  const link = document.createElement('a');
+  link.href = `https://www.google.com/maps?q=${lat},${lng}`;
+  link.target = '_blank';
+  link.textContent = 'Ver en Google Maps';
+  link.style.color = 'var(--accent)';
+  document.getElementById('coordsText').appendChild(link);
+}
+
+function getLocation(){
+  const status = document.getElementById('locStatus');
+  if(!navigator.geolocation){
+    status.textContent = 'Geolocalización no soportada en este navegador.';
+    return;
+  }
+  status.textContent = 'Obteniendo ubicación...';
+  navigator.geolocation.getCurrentPosition(
+    (pos)=>{
+      showMap(pos.coords.latitude, pos.coords.longitude);
+      status.textContent = 'Ubicación capturada ✓';
+      saveState();
+      setTimeout(()=>{ status.textContent=''; }, 2000);
+    },
+    (err)=>{
+      status.textContent = 'No se pudo obtener la ubicación (revisa permisos).';
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+async function enviarABaseDeDatos(){
+  const note = document.getElementById('savedNote');
+  note.textContent = 'Enviando...';
+
+  const payload = {
+    fecha: document.getElementById('fecha').value,
+    responsable: document.getElementById('responsable').value,
+    firma: document.getElementById('firma').value,
+    hora: document.getElementById('hora').value,
+    lat: window.currentLat || null,
+    lng: window.currentLng || null,
+    tareas: TASKS.map((text,i)=>({
+      texto: text,
+      hecho: document.getElementById('task_'+i).checked,
+      obs: document.getElementById('obs_'+i).value
+    })),
+    verif: VERIF.map((text,i)=>({
+      texto: text,
+      hecho: document.getElementById('verif_'+i).checked
+    }))
+  };
+
+  try{
+    const res = await fetch('/.netlify/functions/guardar-cierre', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if(json.ok){
+      note.textContent = 'Guardado en base de datos ✓ (id ' + json.id + ')';
+    } else {
+      note.textContent = 'Error al guardar: ' + (json.error || 'desconocido');
+    }
+  }catch(e){
+    note.textContent = 'No se pudo conectar con la base de datos.';
+  }
+  setTimeout(()=>{ note.textContent=''; }, 4000);
+}
+
+function init(){
+  document.getElementById('fecha').value = todayStr();
+  buildLists();
+  attachEvents();
+  loadForDate(todayStr());
+}
+
+init();
+</script>
+</body>
+</html>
