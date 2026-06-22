@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de Cierres - Administración</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root{
+    --bg:#f4f1ec;
+    --card:#ffffff;
+    --ink:#2b2420;
+    --muted:#7a7268;
+    --accent:#8a5a3a;
+    --accent-light:#e8d9c9;
+    --ok:#3f7d5a;
+    --warn:#b5532d;
+    --line:#e3dbcf;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;font-family:'Segoe UI', Arial, sans-serif;background:var(--bg);
+    color:var(--ink);padding:24px;
+  }
+  .wrap{max-width:920px;margin:0 auto;}
+  h1{font-size:1.5rem;color:var(--accent);margin:0 0 4px;}
+  .sub{color:var(--muted);font-size:0.9rem;margin-bottom:18px;}
+  .card{
+    background:var(--card);border-radius:14px;padding:18px 20px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.06);margin-bottom:16px;
+  }
+  #map{height:340px;border-radius:12px;margin-bottom:18px;}
+  .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;}
+  .filters input, .filters select{
+    border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:0.9rem;background:#fffdf9;
+  }
+  .registro{border-bottom:1px solid var(--line);padding:14px 0;}
+  .registro:last-child{border-bottom:none;}
+  .registro-head{
+    display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:10px;flex-wrap:wrap;
+  }
+  .registro-head .left{display:flex;gap:14px;align-items:center;flex-wrap:wrap;}
+  .fecha-badge{
+    background:var(--accent-light);color:var(--accent);font-weight:600;border-radius:6px;
+    padding:4px 10px;font-size:0.85rem;
+  }
+  .nombre{font-weight:600;}
+  .pct{font-size:0.85rem;color:var(--muted);}
+  .pct.full{color:var(--ok);font-weight:600;}
+  .toggle-icon{color:var(--accent);font-size:0.85rem;}
+  .detalle{display:none;margin-top:12px;padding-left:4px;}
+  .detalle.open{display:block;}
+  ul.tlist{list-style:none;margin:8px 0;padding:0;}
+  ul.tlist li{
+    padding:5px 0;font-size:0.9rem;display:flex;gap:8px;align-items:flex-start;
+  }
+  .chk{flex-shrink:0;}
+  .chk.yes{color:var(--ok);}
+  .chk.no{color:var(--warn);}
+  .obs-line{color:var(--muted);font-size:0.82rem;margin-left:24px;}
+  .meta-line{font-size:0.85rem;color:var(--muted);margin-top:4px;}
+  .empty{color:var(--muted);text-align:center;padding:30px 0;}
+  .loc-link{color:var(--accent);font-size:0.82rem;}
+  button#refreshBtn{
+    background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;
+    font-size:0.85rem;cursor:pointer;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Panel de Cierres Diarios</h1>
+  <div class="sub">Registros enviados por los responsables de cierre.</div>
+
+  <div class="card">
+    <div id="map"></div>
+    <div class="filters">
+      <input type="text" id="filtroResponsable" placeholder="Filtrar por responsable...">
+      <input type="date" id="filtroFecha">
+      <button id="refreshBtn" onclick="cargarDatos()">↻ Actualizar</button>
+    </div>
+  </div>
+
+  <div class="card" id="listaRegistros">
+    <div class="empty">Cargando registros...</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let TODOS = [];
+let map = L.map('map').setView([4.6, -74.08], 5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap'
+}).addTo(map);
+let markers = [];
+
+function pintarMapa(registros){
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+  const puntos = registros.filter(r => r.lat && r.lng);
+  if(puntos.length === 0) return;
+  puntos.forEach(r=>{
+    const m = L.marker([r.lat, r.lng]).addTo(map);
+    m.bindPopup(`<b>${r.responsable || 'Sin nombre'}</b><br>${r.fecha}`);
+    markers.push(m);
+  });
+  const grupo = L.featureGroup(markers);
+  map.fitBounds(grupo.getBounds().pad(0.3));
+}
+
+function pct(registro){
+  let total = 0, hechos = 0;
+  (registro.tareas||[]).forEach(t=>{ total++; if(t.hecho) hechos++; });
+  (registro.verificacion||[]).forEach(v=>{ total++; if(v.hecho) hechos++; });
+  return total ? Math.round((hechos/total)*100) : 0;
+}
+
+function renderLista(){
+  const filtroResp = document.getElementById('filtroResponsable').value.toLowerCase();
+  const filtroFecha = document.getElementById('filtroFecha').value;
+
+  let filtrados = TODOS.filter(r=>{
+    let ok = true;
+    if(filtroResp) ok = ok && (r.responsable||'').toLowerCase().includes(filtroResp);
+    if(filtroFecha) ok = ok && r.fecha === filtroFecha;
+    return ok;
+  });
+
+  const cont = document.getElementById('listaRegistros');
+  if(filtrados.length === 0){
+    cont.innerHTML = '<div class="empty">No hay registros que coincidan.</div>';
+    pintarMapa([]);
+    return;
+  }
+
+  cont.innerHTML = filtrados.map((r,i)=>{
+    const p = pct(r);
+    const pctClass = p === 100 ? 'full' : '';
+    const tareasHtml = (r.tareas||[]).map(t=>`
+      <li><span class="chk ${t.hecho?'yes':'no'}">${t.hecho?'✓':'✗'}</span> ${t.texto}</li>
+      ${t.obs ? `<div class="obs-line">Obs: ${t.obs}</div>` : ''}
+    `).join('');
+    const verifHtml = (r.verificacion||[]).map(v=>`
+      <li><span class="chk ${v.hecho?'yes':'no'}">${v.hecho?'✓':'✗'}</span> ${v.texto}</li>
+    `).join('');
+    const locHtml = (r.lat && r.lng)
+      ? `<a class="loc-link" target="_blank" href="https://www.google.com/maps?q=${r.lat},${r.lng}">Ver ubicación en Google Maps</a>`
+      : `<span class="meta-line">Sin ubicación registrada</span>`;
+
+    return `
+      <div class="registro">
+        <div class="registro-head" onclick="toggleDetalle(${i})">
+          <div class="left">
+            <span class="fecha-badge">${r.fecha || 's/f'}</span>
+            <span class="nombre">${r.responsable || 'Sin nombre'}</span>
+            <span class="pct ${pctClass}">${p}% completado</span>
+          </div>
+          <span class="toggle-icon" id="icon-${i}">▼ ver detalle</span>
+        </div>
+        <div class="detalle" id="detalle-${i}">
+          <div class="meta-line">Hora de cierre: ${r.hora_cierre || '—'} · Firma: ${r.firma || '—'}</div>
+          <p style="margin:8px 0 4px;font-weight:600;font-size:0.9rem;">Tareas</p>
+          <ul class="tlist">${tareasHtml}</ul>
+          <p style="margin:8px 0 4px;font-weight:600;font-size:0.9rem;">Verificación final</p>
+          <ul class="tlist">${verifHtml}</ul>
+          <div style="margin-top:6px;">${locHtml}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  pintarMapa(filtrados);
+}
+
+function toggleDetalle(i){
+  const det = document.getElementById('detalle-'+i);
+  const icon = document.getElementById('icon-'+i);
+  const open = det.classList.toggle('open');
+  icon.textContent = open ? '▲ ocultar' : '▼ ver detalle';
+}
+
+async function cargarDatos(){
+  const cont = document.getElementById('listaRegistros');
+  cont.innerHTML = '<div class="empty">Cargando registros...</div>';
+  try{
+    const res = await fetch('/.netlify/functions/listar-cierres');
+    const json = await res.json();
+    if(json.ok){
+      TODOS = json.registros;
+      renderLista();
+    } else {
+      cont.innerHTML = '<div class="empty">Error: ' + json.error + '</div>';
+    }
+  }catch(e){
+    cont.innerHTML = '<div class="empty">No se pudo conectar con la base de datos.</div>';
+  }
+}
+
+document.getElementById('filtroResponsable').addEventListener('input', renderLista);
+document.getElementById('filtroFecha').addEventListener('change', renderLista);
+
+cargarDatos();
+</script>
+</body>
+</html>
